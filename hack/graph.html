@@ -42,12 +42,7 @@
       // var cincinnati = 'https://api.openshift.com/api/upgrades_info/v1/graph';
       var cincinnati = 'http://localhost:8081/';
 
-      var sourceGraph = {
-        nodes: [],
-        edges: [],
-      };
-
-      var workingGraph = {  // updated after nodes are positioned
+      var graph = {
         nodes: [],
         edges: [],
       };
@@ -61,16 +56,30 @@
         var height = window.innerHeight;
         var width = window.innerWidth;
 
+        var nodes = JSON.parse(JSON.stringify(graph.nodes));  // deep copy
+        var edges = JSON.parse(JSON.stringify(graph.edges));  // deep copy
+        var bentEdges = [];
+        edges.forEach(edge => {
+          var s = nodes[edge.source];
+          var t = nodes[edge.target];
+          var i = {};  // Intermediate node
+          nodes.push(i);
+          edges.push({source: s, target: i}, {source: i, target: t});
+          bentEdges.push([s, i, t])
+        });
+
         svg.selectAll('*').remove();
-        var edge = svg.selectAll('line')
-          .data(workingGraph.edges)
+        var edge = svg.selectAll('path.edge')
+          .data(bentEdges)
           .enter()
-          .append('line')
+          .append('path')
+            .classed('edge', true)
+            .attr('fill', 'none')
             .attr('stroke', 'black')
             .attr('stroke-opacity', '0.25');
 
         var node = svg.selectAll('a.release-circle')
-          .data(workingGraph.nodes)
+          .data(nodes.filter(node => node.version))
           .enter()
           .append('a')
             .classed('release-circle', true)
@@ -87,7 +96,7 @@
           .text(node => node.version);
 
         var nodeText = svg.selectAll('text.release-text')
-          .data(workingGraph.nodes)
+          .data(nodes.filter(node => node.version))
           .enter()
           .append('a')
             .classed('release-text', true)
@@ -97,18 +106,15 @@
             .style('text-anchor', 'middle')
             .text(node => node.version);
 
-        var simulation = d3.forceSimulation(workingGraph.nodes)
-          .force('link', d3.forceLink(workingGraph.edges))
-          .force('charge', d3.forceManyBody().strength(-1000))     // Repel all nodes from each other
+        var simulation = d3.forceSimulation(nodes)
+          .force('link', d3.forceLink(edges))
+          .force('charge', d3.forceManyBody().strength(-200))     // Repel all nodes from each other
           .force('center', d3.forceCenter(width / 2, height / 2))  // Attract nodes to the center of the SVG
           .on('tick', position);
 
         function position() {
           edge
-            .attr('x1', edge => edge.source.x)
-            .attr('y1', edge => edge.source.y)
-            .attr('x2', edge => edge.target.x)
-            .attr('y2', edge => edge.target.y);
+            .attr('d', e => `M ${e[0].x},${e[0].y} S ${e[1].x},${e[1].y} ${e[2].x},${e[2].y}`);
 
           node
            .attr('cx', node => node.x)
@@ -156,7 +162,7 @@
               nodes: data.nodes,
               edges: data.edges.map(edge => ({source: edge[0], target: edge[1]})),
             };
-            if (deepEqual(newGraph, sourceGraph)) {
+            if (deepEqual(newGraph, graph)) {
               console.log('no change to the graph');
               if (interval) {
                 console.log('scheduling a later refetch');
@@ -164,8 +170,7 @@
               }
             } else {
               console.log('new graph; redrawing');
-              workingGraph = JSON.parse(JSON.stringify(newGraph));  // deep copy
-              sourceGraph = newGraph;
+              graph = newGraph;
               redraw(interval);
             }
           })
