@@ -34,6 +34,7 @@
     </div>
     <script>
       var markRadius = 30;
+      var arrowheadScale = 10;
       var architecture = 'amd64';
       var channel = 'stable-4.2';
       var version = null;
@@ -51,6 +52,22 @@
         .attr('preserveAspectRatio', 'xMidYMid meet')
         .attr('xmlns', 'http://www.w3.org/2000/svg')
         .attr('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+      svg.append('defs')
+        .append('marker')
+          .attr('id', 'arrowhead')
+          .attr('viewBox', `0 0 ${arrowheadScale} ${arrowheadScale}`)
+          .attr('markerUnits', 'userSpaceOnUse')
+          .attr('markerWidth', arrowheadScale)
+          .attr('markerHeight', arrowheadScale)
+          .attr('refX', arrowheadScale + markRadius)
+          .attr('refY', arrowheadScale/2)
+          .attr('orient', 'auto')
+        .append('path')
+          .attr('d', `M 0,0 L ${arrowheadScale},${arrowheadScale/2} L 0,${arrowheadScale} z`)
+          .attr('fill', 'black')
+          .attr('fill-opacity', '0.25')
+          .style('stroke', 'none');
 
       function redraw(interval) {
         var height = window.innerHeight;
@@ -101,7 +118,7 @@
           bentEdges.push([s, i, t])
         });
 
-        svg.selectAll('*').remove();
+        svg.selectAll('path.edge').remove();
         var edge = svg.selectAll('path.edge')
           .data(bentEdges)
           .enter()
@@ -109,8 +126,13 @@
             .classed('edge', true)
             .attr('fill', 'none')
             .attr('stroke', 'black')
-            .attr('stroke-opacity', '0.25');
+            .attr('stroke-opacity', '0.25')
+            .attr('stroke-width', 3)
+            .attr('marker-end', 'url(#arrowhead)');
+        edge.append('title')
+          .text(bentEdge => `${bentEdge[0].version} -> ${bentEdge[2].version}`);
 
+        svg.selectAll('a.release-circle').remove();
         var node = svg.selectAll('a.release-circle')
           .data(nodes.filter(node => node.version))
           .enter()
@@ -128,7 +150,8 @@
         node.append('title')
           .text(node => node.version);
 
-        var nodeText = svg.selectAll('text.release-text')
+        svg.selectAll('a.release-text').remove();
+        var nodeText = svg.selectAll('a.release-text')
           .data(nodes.filter(node => node.version))
           .enter()
           .append('a')
