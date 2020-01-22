@@ -32,13 +32,14 @@
         <option value="amd64">amd64</option>
         <option value="s390x">s390x</option>
       </select>
-      <button id="channel">Channel (FIXME: dropdown to select channel)</button>
+      <select id="channel" onchange="refetch()">
+        <option value="stable-4.2">stable-4.2</option>
+      </select>
       <button id="version">Version (FIXME: dropdown to select version)</button>
     </div>
     <script>
       var markRadius = 30;
       var arrowheadScale = 10;
-      var channel = 'stable-4.2';
       var version = null;
 
       // CORS header ‘Access-Control-Allow-Origin’ missing
@@ -76,6 +77,41 @@
         var arch = params.get('arch');
         if (arch) {
           document.getElementById('architecture').value = arch;
+        }
+
+        var channel = params.get('channel');
+        if (channel) {
+          var channelSelect = document.getElementById('channel');
+          appendOptionIfMissing(channelSelect, channel);
+          channelSelect.value = channel;
+        }
+      }
+
+      function updateChannelOptions() {
+        var channels = new Set();
+        graph.nodes.forEach(node => {
+          if (node.metadata && node.metadata['io.openshift.upgrades.graph.release.channels']) {
+            node.metadata['io.openshift.upgrades.graph.release.channels'].split(',').forEach(channel => channels.add(channel));
+          }
+        });
+        var channelSelect = document.getElementById('channel');
+        Array.from(channels).sort().forEach(channel => appendOptionIfMissing(channelSelect, channel));
+      }
+
+      function appendOptionIfMissing(selectElement, optionValue) {
+        var found = false;
+        for (var i = 0; i < selectElement.childNodes.length; i++) {
+          var option = selectElement.childNodes[i];
+          if (option.value == optionValue) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          var opt = document.createElement('option');
+          opt.innerHTML = optionValue;
+          opt.value = optionValue;
+          selectElement.appendChild(opt);
         }
       }
 
@@ -232,7 +268,7 @@
       function refetch(interval) {
         var params = new URLSearchParams();
         params.append('arch', document.getElementById('architecture').value);
-        params.append('channel', channel);
+        params.append('channel', document.getElementById('channel').value);
         history.pushState({}, '', `?${params.toString()}`);
         d3.json(`${cincinnati}?${params.toString()}`)
           .then(data => {
@@ -249,6 +285,7 @@
             } else {
               console.log('new graph; redrawing');
               graph = newGraph;
+              updateChannelOptions();
               redraw(interval);
             }
           })
