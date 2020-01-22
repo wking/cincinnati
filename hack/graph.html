@@ -58,13 +58,46 @@
 
         var nodes = JSON.parse(JSON.stringify(graph.nodes));  // deep copy
         var edges = JSON.parse(JSON.stringify(graph.edges));  // deep copy
+
+        var parents = {};
+        edges.forEach(edge => {
+          if (parents[edge.target] === undefined) {
+            parents[edge.target] = [edge.source];
+          } else {
+            parents[edge.target].push(edge.source);
+          }
+        });
+
+        nodes.forEach((node, index) => {
+          if (parents[index] === undefined) {
+            node.rank = 1;
+          }
+        });
+        for (let ranked = true; ranked;) {
+          ranked = false;
+          nodes.forEach((node, index) => {
+            if (node.rank) {
+              return;
+            }
+            var parentRanks = parents[index].map(i => nodes[i].rank);
+            if (parentRanks.includes(undefined)) {
+              return;
+            }
+            node.rank = Math.max(...parentRanks) + 1;
+            ranked = true;
+          });
+        }
+        var maxRank = Math.max(...nodes.map(node => node.rank));
+
         var bentEdges = [];
         edges.forEach(edge => {
           var s = nodes[edge.source];
           var t = nodes[edge.target];
-          var i = {};  // Intermediate node
+          var i = {rank: (t.rank + s.rank) / 2};  // Intermediate node
+          var d = (t.rank - s.rank);
           nodes.push(i);
-          edges.push({source: s, target: i}, {source: i, target: t});
+          edge.distance = 2*d;
+          edges.push({source: s, target: i, distance: d}, {source: i, target: t, distance: d});
           bentEdges.push([s, i, t])
         });
 
@@ -107,10 +140,21 @@
             .text(node => node.version);
 
         var simulation = d3.forceSimulation(nodes)
-          .force('link', d3.forceLink(edges))
-          .force('charge', d3.forceManyBody().strength(-200))     // Repel all nodes from each other
+          .force('link', d3.forceLink(edges).distance(edge => edge.distance))
+          .force('charge', d3.forceManyBody().strength(-300))     // Repel all nodes from each other
           .force('center', d3.forceCenter(width / 2, height / 2))  // Attract nodes to the center of the SVG
+          .force('rank', rankForce)
           .on('tick', position);
+
+        function rankForce(alpha) {
+          nodes.forEach(node => {
+            if (!node.rank) {
+              return;
+            }
+            var dy = 100 * (node.rank - maxRank / 2) - node.y;
+            node.vy += dy * alpha * 0.1;
+          });
+        }
 
         function position() {
           edge
